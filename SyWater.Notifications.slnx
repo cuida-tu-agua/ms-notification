@@ -1,10 +1,12 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/SyWater.Notifications.Api/SyWater.Notifications.Api.csproj" />
     <Project Path="src/SyWater.Notifications.Application/SyWater.Notifications.Application.csproj" />
     <Project Path="src/SyWater.Notifications.Domain/SyWater.Notifications.Domain.csproj" />
     <Project Path="src/SyWater.Notifications.Infrastructure/SyWater.Notifications.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/SyWater.Notifications.Api.Tests/SyWater.Notifications.Api.Tests.csproj" />
     <Project Path="tests/SyWater.Notifications.Application.Tests/SyWater.Notifications.Application.Tests.csproj" />
     <Project Path="tests/SyWater.Notifications.Infrastructure.Tests/SyWater.Notifications.Infrastructure.Tests.csproj" />
     <Project Path="tests/SyWater.Notifications.Domain.Tests/SyWater.Notifications.Domain.Tests.csproj" />
