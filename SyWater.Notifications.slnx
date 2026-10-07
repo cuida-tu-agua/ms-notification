@@ -6,6 +6,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SyWater.Notifications.Application.Tests/SyWater.Notifications.Application.Tests.csproj" />
+    <Project Path="tests/SyWater.Notifications.Infrastructure.Tests/SyWater.Notifications.Infrastructure.Tests.csproj" />
     <Project Path="tests/SyWater.Notifications.Domain.Tests/SyWater.Notifications.Domain.Tests.csproj" />
   </Folder>
 </Solution>
