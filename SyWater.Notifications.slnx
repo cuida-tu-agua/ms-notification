@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SyWater.Notifications.Application/SyWater.Notifications.Application.csproj" />
+    <Project Path="src/SyWater.Notifications.Domain/SyWater.Notifications.Domain.csproj" />
+    <Project Path="src/SyWater.Notifications.Infrastructure/SyWater.Notifications.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SyWater.Notifications.Domain.Tests/SyWater.Notifications.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
