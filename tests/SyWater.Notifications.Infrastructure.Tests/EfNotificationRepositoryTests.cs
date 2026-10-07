@@ -122,3 +122,64 @@ public sealed class EfNotificationRepositoryTests : IDisposable
 
     public void Dispose() => _sqlite.Dispose();
 }
+
+public sealed class EfPlaceDeviceRepositoryTests : IDisposable
+{
+    private static readonly DateTime T0 = new(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
+    private readonly SqliteConnection _sqlite = new("DataSource=:memory:");
+    private readonly DbContextOptions<NotificationDbContext> _options;
+    private readonly Guid _place = Guid.NewGuid();
+    private readonly Guid _device = Guid.NewGuid();
+    private readonly Guid _user = Guid.NewGuid();
+
+    public EfPlaceDeviceRepositoryTests()
+    {
+        _sqlite.Open();
+        _options = new DbContextOptionsBuilder<NotificationDbContext>().UseSqlite(_sqlite).Options;
+        using var db = new NotificationDbContext(_options);
+        db.Database.EnsureCreated();
+    }
+
+    private EfPlaceDeviceRepository Repo() => new(new NotificationDbContext(_options));
+
+    [Fact]
+    public async Task Link_report_and_unlink_round_trip()
+    {
+        await Repo().ReplaceAsync(SyWater.Notifications.Domain.Devices.PlaceDevice.ForNewLink(_place, _device, _user, "SW-1"), T0, default);
+        var device = await Repo().GetByPlaceAsync(_place, default);
+        Assert.NotNull(device);
+        Assert.Equal(_user, device.UserId);
+        Assert.Null(device.ValveState);
+
+        device.ApplyValveReport(SyWater.Notifications.Domain.Devices.ValveStatus.Closed, T0.AddMinutes(1));
+        await Repo().SaveValveReportAsync(device, default);
+        var saved = await Repo().GetByPlaceAsync(_place, default);
+        Assert.Equal(SyWater.Notifications.Domain.Devices.ValveStatus.Closed, saved!.ValveState);
+        Assert.Equal(DateTimeKind.Utc, saved.ValveReportedAt!.Value.Kind);
+
+        await Repo().RemoveAsync(_place, Guid.NewGuid(), default);   // another device: nothing happens
+        Assert.NotNull(await Repo().GetByPlaceAsync(_place, default));
+        await Repo().RemoveAsync(_place, _device, default);
+        Assert.Null(await Repo().GetByPlaceAsync(_place, default));
+    }
+
+    [Fact]
+    public async Task Linking_again_replaces_the_row_and_an_older_report_does_not_overwrite_a_newer_one()
+    {
+        await Repo().ReplaceAsync(SyWater.Notifications.Domain.Devices.PlaceDevice.ForNewLink(_place, _device, _user, "SW-1"), T0, default);
+        var newOwner = Guid.NewGuid();
+        await Repo().ReplaceAsync(SyWater.Notifications.Domain.Devices.PlaceDevice.ForNewLink(_place, _device, newOwner, "SW-1"), T0, default);
+        var device = await Repo().GetByPlaceAsync(_place, default);
+        Assert.Equal(newOwner, device!.UserId);
+
+        device.ApplyValveReport(SyWater.Notifications.Domain.Devices.ValveStatus.Closed, T0.AddMinutes(5));
+        await Repo().SaveValveReportAsync(device, default);
+        var stale = SyWater.Notifications.Domain.Devices.PlaceDevice.Restore(_place, _device, newOwner, "SW-1",
+            SyWater.Notifications.Domain.Devices.ValveStatus.Open, T0.AddMinutes(1));
+        await Repo().SaveValveReportAsync(stale, default);
+
+        Assert.Equal(SyWater.Notifications.Domain.Devices.ValveStatus.Closed, (await Repo().GetByPlaceAsync(_place, default))!.ValveState);
+    }
+
+    public void Dispose() => _sqlite.Dispose();
+}

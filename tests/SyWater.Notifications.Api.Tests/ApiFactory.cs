@@ -39,6 +39,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:Notification", "unused-in-tests");
         builder.UseSetting("Jwt:PublicKeyPath", _publicKeyPath);
+        builder.UseSetting("RabbitMq:Host", "");   // no consumer: the tests call the handler directly
 
         builder.ConfigureTestServices(services =>
         {

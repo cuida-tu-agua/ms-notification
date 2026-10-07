@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using SyWater.Notifications.Application.Events;
+using SyWater.Notifications.Application.Ports.In;
 using SyWater.Notifications.Domain.Notifications;
 
 namespace SyWater.Notifications.Api.Tests;
@@ -109,5 +112,25 @@ public sealed class NotificationsApiTests : IDisposable
             .EnumerateArray().Select(n => n.GetProperty("title").GetString());
 
         Assert.Equal(["mine"], titles);
+    }
+
+    [Fact]
+    public async Task A_valve_closed_event_reaches_the_owner_inbox_as_critical_and_nobody_elses()
+    {
+        var owner = Guid.NewGuid();
+        var place = Guid.NewGuid();
+        var device = Guid.NewGuid();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var handler = scope.ServiceProvider.GetRequiredService<IDeviceEventsHandler>();
+            await handler.HandleAsync("evt-1", new DeviceLinkedEvent(device, "SW-ESP32-000001", place, owner, DateTime.UtcNow), default);
+            await handler.HandleAsync("evt-2", new ValveReportedEvent(device, place, "CLOSED", null, DateTime.UtcNow.AddSeconds(1)), default);
+        }
+
+        var inbox = (await Client(owner, Roles.User).GetFromJsonAsync<JsonElement>("/api/notifications")).EnumerateArray().ToList();
+        var closed = Assert.Single(inbox, n => n.GetProperty("severity").GetString() == "CRITICAL");
+        Assert.Equal("VALVE_CHANGED", closed.GetProperty("type").GetString());
+        Assert.Equal(place, closed.GetProperty("placeId").GetGuid());
+        Assert.Empty((await Client(Guid.NewGuid(), Roles.User).GetFromJsonAsync<JsonElement>("/api/notifications")).EnumerateArray());
     }
 }

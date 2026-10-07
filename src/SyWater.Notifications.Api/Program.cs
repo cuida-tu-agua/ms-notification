@@ -8,7 +8,7 @@ using SyWater.Notifications.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Inbound adapter: HTTP ────────────────────────────────────────────────
+// ── Inbound adapters: HTTP and RabbitMQ ────────────────────────────────────────────────
 // Enums travel as "VALVE_CHANGED", "CRITICAL"… (same style as the rest of the API)
 builder.Services.AddControllers().AddJsonOptions(o =>
     o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseUpper)));
@@ -19,6 +19,7 @@ builder.Services.AddOpenApi();
 // ── Hexagon + adapters ──────────────────────────────────────────────────
 builder.Services.AddNotificationsApplication();
 builder.Services.AddNotificationsInfrastructure(builder.Configuration);
+builder.Services.AddNotificationsBackground(builder.Configuration);
 
 // ── Security: every endpoint requires a valid ms-iam token unless marked AllowAnonymous ──
 builder.Services.AddIamJwtAuthentication(builder.Configuration, builder.Environment);

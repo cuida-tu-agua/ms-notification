@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SyWater.Notifications.Api.Messaging;
 using SyWater.Notifications.Application.Ports.In;
 using SyWater.Notifications.Application.Ports.Out;
 using SyWater.Notifications.Application.UseCases;
@@ -16,6 +17,16 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IGetUnreadCountUseCase, GetUnreadCountUseCase>();
         services.AddScoped<IMarkNotificationReadUseCase, MarkNotificationReadUseCase>();
         services.AddScoped<IMarkAllNotificationsReadUseCase, MarkAllNotificationsReadUseCase>();
+        services.AddScoped<IDeviceEventsHandler, DeviceEventsHandler>();
+        return services;
+    }
+
+    /// <summary>RabbitMQ consumer (empty RabbitMq:Host = not started: the API still serves the stored inbox).</summary>
+    public static IServiceCollection AddNotificationsBackground(this IServiceCollection services, IConfiguration config)
+    {
+        services.Configure<RabbitMqOptions>(config.GetSection(RabbitMqOptions.Section));
+        if (!string.IsNullOrWhiteSpace(config[$"{RabbitMqOptions.Section}:Host"]))
+            services.AddHostedService<DeviceEventsConsumer>();
         return services;
     }
 
@@ -27,6 +38,7 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContext<NotificationDbContext>(options => options.UseSqlServer(connectionString));
         services.AddScoped<INotificationRepository, EfNotificationRepository>();
+        services.AddScoped<IPlaceDeviceRepository, EfPlaceDeviceRepository>();
         return services;
     }
 }
