@@ -24,3 +24,9 @@ public interface IMarkAllNotificationsReadUseCase
     /// <returns>How many notifications were marked.</returns>
     Task<int> ExecuteAsync(Requester requester, CancellationToken ct);
 }
+
+/// <summary>HU-027: sends the mails of the outbox that are due. Returns how many left.</summary>
+public interface ISendDueEmailsUseCase
+{
+    Task<int> ExecuteAsync(CancellationToken ct);
+}

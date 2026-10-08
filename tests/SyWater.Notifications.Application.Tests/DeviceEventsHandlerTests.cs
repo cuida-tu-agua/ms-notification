@@ -33,7 +33,7 @@ public class DeviceEventsHandlerTests
     private readonly Guid _place = Guid.NewGuid();
     private readonly Guid _device = Guid.NewGuid();
 
-    private DeviceEventsHandler Handler() => new(_devices, new NotificationDispatcher(_notifications, new FakePreferences()), _clock);
+    private DeviceEventsHandler Handler() => new(_devices, new NotificationDispatcher(_notifications, new FakePreferences(), new FakeOutbox(), new EmailSettings(true, "http://app"), _clock), _clock);
 
     private Task Link(string eventId = "evt-link") =>
         Handler().HandleAsync(eventId, new DeviceLinkedEvent(_device, "SW-ESP32-000001", _place, _user, _clock.Now), default);

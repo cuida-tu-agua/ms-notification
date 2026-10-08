@@ -30,7 +30,8 @@ public class PreferenceTests
     private readonly Requester _me = new(Guid.NewGuid(), [Roles.User]);
 
     private UpdateMyPreferencesUseCase Update() => new(_prefs, _clock);
-    private NotificationDispatcher Dispatcher() => new(_notifications, _prefs);
+    private readonly FakeOutbox _outbox = new();
+    private NotificationDispatcher Dispatcher() => new(_notifications, _prefs, _outbox, new EmailSettings(true, "http://app"), _clock);
 
     private Notification Personal(NotificationSeverity severity, string? source = "evt-1") =>
         Notification.Create(Audience.ForUser(_me.UserId), NotificationType.ValveChanged, severity, "T", "B", null, source, _clock.Now);
@@ -91,10 +92,11 @@ public class PreferenceTests
     [Fact]
     public async Task The_dispatcher_stores_in_app_and_reports_the_other_channels_to_deliver()
     {
-        var external = await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Critical), default);
+        var external = await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Critical), new DeliveryContext("Lugar de prueba"), default);
 
         Assert.Single(_notifications.All);
-        Assert.Equal(NotificationChannels.Push | NotificationChannels.Email | NotificationChannels.Sms, external);
+        Assert.Equal(NotificationChannels.Push | NotificationChannels.Sms, external);   // push + SMS have no adapter yet
+        Assert.Single(_outbox.All);                                                    // the e-mail is queued
     }
 
     [Fact]
@@ -102,7 +104,7 @@ public class PreferenceTests
     {
         await Update().ExecuteAsync(_me, NotificationSeverity.Info, false, false, false, false, default);
 
-        var external = await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Info), default);
+        var external = await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Info), new DeliveryContext("Lugar de prueba"), default);
 
         Assert.Empty(_notifications.All);
         Assert.Equal(NotificationChannels.None, external);
@@ -112,21 +114,24 @@ public class PreferenceTests
     public async Task A_changed_preference_applies_to_the_very_next_notification()
     {
         await Update().ExecuteAsync(_me, NotificationSeverity.Warning, true, false, false, false, default);
-        Assert.Equal(NotificationChannels.None, await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Warning, "evt-1"), default));
+        Assert.Equal(NotificationChannels.None, await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Warning, "evt-1"), new DeliveryContext("Lugar de prueba"), default));
 
         await Update().ExecuteAsync(_me, NotificationSeverity.Warning, true, false, true, false, default);
-        Assert.Equal(NotificationChannels.Email, await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Warning, "evt-2"), default));
+        Assert.Empty(_outbox.All);
+        await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Warning, "evt-2"), new DeliveryContext("Lugar de prueba"), default);
+        Assert.Single(_outbox.All);   // the e-mail channel was switched on and applies at once
     }
 
     [Fact]
-    public async Task A_redelivered_event_delivers_nothing_twice()
+    public async Task A_redelivered_event_creates_one_notification_and_one_mail()
     {
-        await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Critical, "evt-1"), default);
+        await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Critical, "evt-1"), new DeliveryContext("Lugar de prueba"), default);
 
-        var again = await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Critical, "evt-1"), default);
+        var again = await Dispatcher().DispatchAsync(Personal(NotificationSeverity.Critical, "evt-1"), new DeliveryContext("Lugar de prueba"), default);
 
         Assert.Single(_notifications.All);
-        Assert.Equal(NotificationChannels.None, again);
+        Assert.Single(_outbox.All);   // one mail too
+        Assert.Equal(NotificationChannels.Push | NotificationChannels.Sms, again);   // steps are idempotent, so it can safely rerun
     }
 
     [Fact]
@@ -135,7 +140,7 @@ public class PreferenceTests
         var broadcast = Notification.Create(Audience.ForRole(Roles.Admin), NotificationType.SystemAnnouncement,
             NotificationSeverity.Info, "T", "B", null, null, _clock.Now);
 
-        Assert.Equal(NotificationChannels.None, await Dispatcher().DispatchAsync(broadcast, default));
+        Assert.Equal(NotificationChannels.None, await Dispatcher().DispatchAsync(broadcast, new DeliveryContext("Lugar de prueba"), default));
         Assert.Single(_notifications.All);
     }
 

@@ -17,7 +17,7 @@ builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddOpenApi();
 
 // ── Hexagon + adapters ──────────────────────────────────────────────────
-builder.Services.AddNotificationsApplication();
+builder.Services.AddNotificationsApplication(builder.Configuration);
 builder.Services.AddNotificationsInfrastructure(builder.Configuration);
 builder.Services.AddNotificationsBackground(builder.Configuration);
 

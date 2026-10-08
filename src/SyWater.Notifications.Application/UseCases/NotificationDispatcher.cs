@@ -1,4 +1,5 @@
 using SyWater.Notifications.Application.Ports.Out;
+using SyWater.Notifications.Domain.Emails;
 using SyWater.Notifications.Domain.Notifications;
 using SyWater.Notifications.Domain.Preferences;
 
@@ -6,16 +7,22 @@ namespace SyWater.Notifications.Application.UseCases;
 
 /// <summary>
 /// Where a freshly created notification goes, according to the channels its owner chose for its urgency
-/// level (HU-034). The in-app notification is the one stored in the notification center; the other channels
-/// are delivered by their own adapters.
+/// level (HU-034). In-app = the notification center; e-mail = queued in the outbox (HU-027).
+/// Every step is idempotent, so a redelivered event can safely run the whole thing again.
 /// </summary>
-public sealed class NotificationDispatcher(INotificationRepository notifications, INotificationPreferenceRepository preferences)
+public sealed class NotificationDispatcher(
+    INotificationRepository notifications,
+    INotificationPreferenceRepository preferences,
+    IEmailOutboxRepository outbox,
+    EmailSettings email,
+    TimeProvider clock)
 {
     /// <summary>
-    /// Stores it if the user keeps the in-app channel (CRITICAL always does) and returns the channels it must
-    /// still be delivered through. A broadcast to a role is not personal: it is always stored in-app.
+    /// Stores it in-app if the user keeps that channel (CRITICAL always does) and queues the mail if they want
+    /// it. A broadcast to a role is not personal: it is always stored in-app and never mailed.
     /// </summary>
-    public async Task<NotificationChannels> DispatchAsync(Notification notification, CancellationToken ct)
+    /// <returns>The channels the user wants that this service cannot deliver yet (push, WhatsApp/SMS).</returns>
+    public async Task<NotificationChannels> DispatchAsync(Notification notification, DeliveryContext context, CancellationToken ct)
     {
         if (notification.Audience.UserId is not { } userId)
         {
@@ -24,9 +31,17 @@ public sealed class NotificationDispatcher(INotificationRepository notifications
         }
 
         var channels = (await preferences.GetAsync(userId, ct)).ChannelsFor(notification.Severity);
-        if (channels.HasFlag(NotificationChannels.InApp) && !await notifications.AddAsync(notification, ct))
-            return NotificationChannels.None;   // already created for this event: nothing to deliver twice
 
-        return channels & ~NotificationChannels.InApp;
+        if (channels.HasFlag(NotificationChannels.InApp))
+            await notifications.AddAsync(notification, ct);
+
+        if (channels.HasFlag(NotificationChannels.Email) && email.Enabled)
+        {
+            var (subject, text, html) = EmailComposer.Compose(notification, context, email.AppBaseUrl);
+            await outbox.AddAsync(
+                EmailOutboxItem.Queue(userId, notification.SourceEventId, subject, text, html, clock.GetUtcNow().UtcDateTime), ct);
+        }
+
+        return channels & (NotificationChannels.Push | NotificationChannels.Sms);
     }
 }

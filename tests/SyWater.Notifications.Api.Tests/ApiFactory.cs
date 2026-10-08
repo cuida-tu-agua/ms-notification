@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using SyWater.Notifications.Api.Security;
@@ -28,6 +29,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly SqliteConnection _sqlite = new("DataSource=:memory:");
     private readonly string _publicKeyPath = Path.Combine(Path.GetTempPath(), $"iam-public-{Guid.NewGuid():N}.pem");
 
+    public FakeContacts Contacts { get; } = new();
+    public FakeSender Sender { get; } = new();
+
     public ApiFactory()
     {
         _sqlite.Open();
@@ -40,6 +44,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Notification", "unused-in-tests");
         builder.UseSetting("Jwt:PublicKeyPath", _publicKeyPath);
         builder.UseSetting("RabbitMq:Host", "");   // no consumer: the tests call the handler directly
+        builder.UseSetting("Internal:ApiKey", "test-internal-key-0123456789");   // the e-mail channel is on in Development (Mailpit)
 
         builder.ConfigureTestServices(services =>
         {
@@ -47,6 +52,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions<NotificationDbContext>>();
             var options = new DbContextOptionsBuilder<NotificationDbContext>().UseSqlite(_sqlite).Options;
             services.AddScoped<NotificationDbContext>(_ => new NotificationDbContext(options));
+
+            services.RemoveAll<IHostedService>();   // no RabbitMQ consumer, no e-mail worker: the tests call the use cases
+            services.RemoveAll<IUserContactDirectory>();
+            services.AddSingleton<IUserContactDirectory>(Contacts);
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(Sender);
 
             services.RemoveAll<ITokenRevocationChecker>();
             services.AddSingleton<ITokenRevocationChecker, NoRevocations>();

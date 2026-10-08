@@ -19,7 +19,7 @@ public sealed class DeviceEventsHandler(IPlaceDeviceRepository devices, Notifica
         var now = Now();
         await devices.ReplaceAsync(PlaceDevice.ForNewLink(e.PlaceId, e.DeviceId, e.UserId, e.SerialNumber), now, ct);
         await Notify(e.UserId, NotificationType.DeviceLinked, NotificationSeverity.Info, "Dispositivo vinculado",
-            $"El dispositivo {e.SerialNumber} quedó vinculado a tu lugar.", e.PlaceId, eventId, now, ct);
+            $"El dispositivo {e.SerialNumber} quedó vinculado a tu lugar.", e.PlaceId, eventId, now, Label(e.SerialNumber), ct);
     }
 
     /// <summary>HU-014.</summary>
@@ -28,7 +28,7 @@ public sealed class DeviceEventsHandler(IPlaceDeviceRepository devices, Notifica
         var now = Now();
         await devices.RemoveAsync(e.PlaceId, e.DeviceId, ct);
         await Notify(e.UserId, NotificationType.DeviceUnlinked, NotificationSeverity.Info, "Dispositivo desvinculado",
-            $"El dispositivo {e.SerialNumber} dejó de estar vinculado a tu lugar.", e.PlaceId, eventId, now, ct);
+            $"El dispositivo {e.SerialNumber} dejó de estar vinculado a tu lugar.", e.PlaceId, eventId, now, Label(e.SerialNumber), ct);
     }
 
     /// <summary>
@@ -56,11 +56,11 @@ public sealed class DeviceEventsHandler(IPlaceDeviceRepository devices, Notifica
             case ValveChange.Closed:
                 await Notify(device.UserId, NotificationType.ValveChanged, NotificationSeverity.Critical, "Válvula cerrada",
                     "El paso del agua de tu lugar se cerró y el lugar quedó sin agua. Si no fuiste tú, revisa el historial de la válvula y ábrela desde la app cuando sea seguro.",
-                    e.PlaceId, eventId, now, ct);
+                    e.PlaceId, eventId, now, Label(device.SerialNumber), ct);
                 break;
             case ValveChange.Opened:
                 await Notify(device.UserId, NotificationType.ValveChanged, NotificationSeverity.Info, "Válvula abierta",
-                    "El paso del agua de tu lugar se restableció.", e.PlaceId, eventId, now, ct);
+                    "El paso del agua de tu lugar se restableció.", e.PlaceId, eventId, now, Label(device.SerialNumber), ct);
                 break;
         }
 
@@ -69,10 +69,13 @@ public sealed class DeviceEventsHandler(IPlaceDeviceRepository devices, Notifica
         await devices.SaveValveReportAsync(device, ct);
     }
 
+    private static string Label(string serial) => $"Lugar con el dispositivo {serial}";
+
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 
     private Task Notify(Guid userId, NotificationType type, NotificationSeverity severity, string title, string body,
-        Guid placeId, string eventId, DateTime now, CancellationToken ct) =>
+        Guid placeId, string eventId, DateTime now, string? placeLabel, CancellationToken ct) =>
         dispatcher.DispatchAsync(
-            Notification.Create(Audience.ForUser(userId), type, severity, title, body, placeId, eventId, now), ct);
+            Notification.Create(Audience.ForUser(userId), type, severity, title, body, placeId, eventId, now),
+            new DeliveryContext(placeLabel), ct);
 }

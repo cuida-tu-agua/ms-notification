@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using SyWater.Notifications.Application.Events;
 using SyWater.Notifications.Application.Ports.In;
+using SyWater.Notifications.Application.Ports.Out;
 using SyWater.Notifications.Domain.Notifications;
 
 namespace SyWater.Notifications.Api.Tests;
@@ -170,5 +171,26 @@ public sealed class NotificationsApiTests : IDisposable
     public async Task Preferences_need_a_token()
     {
         Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateClient().GetAsync("/api/notification-preferences")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_valve_closed_event_queues_a_mail_that_the_worker_sends_to_the_address_ms_iam_gives()
+    {
+        var owner = Guid.NewGuid();
+        var place = Guid.NewGuid();
+        var device = Guid.NewGuid();
+        _factory.Contacts.Known[owner] = new UserContact(owner, "juan@example.com", "Juan Ome");
+        using var scope = _factory.Services.CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredService<IDeviceEventsHandler>();
+        await handler.HandleAsync("evt-1", new DeviceLinkedEvent(device, "SW-ESP32-000001", place, owner, DateTime.UtcNow), default);
+        await handler.HandleAsync("evt-2", new ValveReportedEvent(device, place, "CLOSED", null, DateTime.UtcNow.AddSeconds(1)), default);
+        await handler.HandleAsync("evt-2", new ValveReportedEvent(device, place, "CLOSED", null, DateTime.UtcNow.AddSeconds(1)), default);   // redelivered
+
+        Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<ISendDueEmailsUseCase>().ExecuteAsync(default));
+
+        var mail = Assert.Single(_factory.Sender.Sent);   // Info "linked" does not mail by default; critical does, once
+        Assert.Equal("juan@example.com", mail.ToAddress);
+        Assert.Contains("Válvula cerrada", mail.Subject);
+        Assert.Contains($"/places/{place}", mail.TextBody);
     }
 }
