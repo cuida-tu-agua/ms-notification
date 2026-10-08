@@ -10,7 +10,7 @@ namespace SyWater.Notifications.Application.UseCases;
 /// Turns device events into notifications for the owner of the place. Every handler is idempotent:
 /// RabbitMQ may deliver an event twice or out of order, and the result must be the same.
 /// </summary>
-public sealed class DeviceEventsHandler(IPlaceDeviceRepository devices, INotificationRepository notifications, TimeProvider clock)
+public sealed class DeviceEventsHandler(IPlaceDeviceRepository devices, NotificationDispatcher dispatcher, TimeProvider clock)
     : IDeviceEventsHandler
 {
     /// <summary>HU-012: the owner learns that the device is linked; and from now on we know who owns the place.</summary>
@@ -73,6 +73,6 @@ public sealed class DeviceEventsHandler(IPlaceDeviceRepository devices, INotific
 
     private Task Notify(Guid userId, NotificationType type, NotificationSeverity severity, string title, string body,
         Guid placeId, string eventId, DateTime now, CancellationToken ct) =>
-        notifications.AddAsync(
+        dispatcher.DispatchAsync(
             Notification.Create(Audience.ForUser(userId), type, severity, title, body, placeId, eventId, now), ct);
 }

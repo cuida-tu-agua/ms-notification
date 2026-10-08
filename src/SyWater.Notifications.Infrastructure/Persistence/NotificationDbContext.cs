@@ -9,11 +9,13 @@ public class NotificationDbContext(DbContextOptions options) : DbContext(options
     public DbSet<NotificationEntity> Notifications => Set<NotificationEntity>();
     public DbSet<NotificationReadEntity> Reads => Set<NotificationReadEntity>();
     public DbSet<PlaceDeviceEntity> PlaceDevices => Set<PlaceDeviceEntity>();
+    public DbSet<NotificationPreferenceEntity> Preferences => Set<NotificationPreferenceEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<NotificationReadEntity>().HasKey(r => new { r.NotificationId, r.UserId });   // PK_notification_reads
         modelBuilder.Entity<PlaceDeviceEntity>().HasIndex(d => d.DeviceId).IsUnique();   // UQ_pdev_device
+        modelBuilder.Entity<NotificationPreferenceEntity>().HasKey(p => new { p.UserId, p.Severity });   // PK_notification_preferences
 
         // UX_notif_source_audience (SQL Server treats NULLs as equal in unique indexes; SQLite does not,
         // so the repository also checks before inserting)

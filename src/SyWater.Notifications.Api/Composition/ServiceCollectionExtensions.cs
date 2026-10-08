@@ -17,6 +17,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IGetUnreadCountUseCase, GetUnreadCountUseCase>();
         services.AddScoped<IMarkNotificationReadUseCase, MarkNotificationReadUseCase>();
         services.AddScoped<IMarkAllNotificationsReadUseCase, MarkAllNotificationsReadUseCase>();
+        services.AddScoped<IGetMyPreferencesUseCase, GetMyPreferencesUseCase>();
+        services.AddScoped<IUpdateMyPreferencesUseCase, UpdateMyPreferencesUseCase>();
+        services.AddScoped<NotificationDispatcher>();
         services.AddScoped<IDeviceEventsHandler, DeviceEventsHandler>();
         return services;
     }
@@ -39,6 +42,7 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<NotificationDbContext>(options => options.UseSqlServer(connectionString));
         services.AddScoped<INotificationRepository, EfNotificationRepository>();
         services.AddScoped<IPlaceDeviceRepository, EfPlaceDeviceRepository>();
+        services.AddScoped<INotificationPreferenceRepository, EfNotificationPreferenceRepository>();
         return services;
     }
 }

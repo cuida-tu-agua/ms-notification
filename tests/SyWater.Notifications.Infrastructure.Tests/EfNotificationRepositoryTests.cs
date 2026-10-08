@@ -183,3 +183,49 @@ public sealed class EfPlaceDeviceRepositoryTests : IDisposable
 
     public void Dispose() => _sqlite.Dispose();
 }
+
+public sealed class EfNotificationPreferenceRepositoryTests : IDisposable
+{
+    private static readonly DateTime Now = new(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
+    private readonly SqliteConnection _sqlite = new("DataSource=:memory:");
+    private readonly DbContextOptions<NotificationDbContext> _options;
+    private readonly Guid _user = Guid.NewGuid();
+
+    public EfNotificationPreferenceRepositoryTests()
+    {
+        _sqlite.Open();
+        _options = new DbContextOptionsBuilder<NotificationDbContext>().UseSqlite(_sqlite).Options;
+        using var db = new NotificationDbContext(_options);
+        db.Database.EnsureCreated();
+    }
+
+    private EfNotificationPreferenceRepository Repo() => new(new NotificationDbContext(_options));
+
+    [Fact]
+    public async Task Nothing_saved_means_the_defaults_and_a_save_overrides_only_that_level()
+    {
+        var before = await Repo().GetAsync(_user, default);
+        Assert.Equal(SyWater.Notifications.Domain.Preferences.NotificationChannels.All, before.ChannelsFor(NotificationSeverity.Critical));
+
+        await Repo().SaveAsync(_user, NotificationSeverity.Warning, SyWater.Notifications.Domain.Preferences.NotificationChannels.Email, Now, default);
+
+        var after = await Repo().GetAsync(_user, default);
+        Assert.Equal(SyWater.Notifications.Domain.Preferences.NotificationChannels.Email, after.ChannelsFor(NotificationSeverity.Warning));
+        Assert.Equal(SyWater.Notifications.Domain.Preferences.NotificationChannels.All, after.ChannelsFor(NotificationSeverity.Critical));
+        Assert.Equal(SyWater.Notifications.Domain.Preferences.NotificationChannels.InApp, after.ChannelsFor(NotificationSeverity.Info));
+    }
+
+    [Fact]
+    public async Task Saving_twice_updates_the_same_row_and_other_users_are_not_touched()
+    {
+        var channels = SyWater.Notifications.Domain.Preferences.NotificationChannels.InApp;
+        await Repo().SaveAsync(_user, NotificationSeverity.Info, SyWater.Notifications.Domain.Preferences.NotificationChannels.None, Now, default);
+        await Repo().SaveAsync(_user, NotificationSeverity.Info, channels | SyWater.Notifications.Domain.Preferences.NotificationChannels.Sms, Now, default);
+
+        Assert.Equal(channels | SyWater.Notifications.Domain.Preferences.NotificationChannels.Sms,
+            (await Repo().GetAsync(_user, default)).ChannelsFor(NotificationSeverity.Info));
+        Assert.Equal(channels, (await Repo().GetAsync(Guid.NewGuid(), default)).ChannelsFor(NotificationSeverity.Info));
+    }
+
+    public void Dispose() => _sqlite.Dispose();
+}

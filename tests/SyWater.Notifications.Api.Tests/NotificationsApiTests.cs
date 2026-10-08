@@ -133,4 +133,42 @@ public sealed class NotificationsApiTests : IDisposable
         Assert.Equal(place, closed.GetProperty("placeId").GetGuid());
         Assert.Empty((await Client(Guid.NewGuid(), Roles.User).GetFromJsonAsync<JsonElement>("/api/notifications")).EnumerateArray());
     }
+
+    [Fact]
+    public async Task Preferences_show_the_matrix_defaults_and_a_change_applies_to_the_next_notification()
+    {
+        var owner = Guid.NewGuid();
+        var client = Client(owner, Roles.User);
+
+        var defaults = (await client.GetFromJsonAsync<JsonElement>("/api/notification-preferences")).GetProperty("levels");
+        var critical = defaults.EnumerateArray().Single(l => l.GetProperty("severity").GetString() == "CRITICAL");
+        Assert.True(critical.GetProperty("email").GetBoolean());
+
+        var off = await client.PutAsJsonAsync("/api/notification-preferences/info", new { inApp = false, push = false, email = false, sms = false });
+        Assert.Equal(HttpStatusCode.OK, off.StatusCode);   // the route accepts the level in any case
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var handler = scope.ServiceProvider.GetRequiredService<IDeviceEventsHandler>();
+            await handler.HandleAsync("evt-1", new DeviceLinkedEvent(Guid.NewGuid(), "SW-1", Guid.NewGuid(), owner, DateTime.UtcNow), default);
+        }
+
+        Assert.Empty((await client.GetFromJsonAsync<JsonElement>("/api/notifications")).EnumerateArray());   // the Info notice was switched off
+    }
+
+    [Fact]
+    public async Task Turning_off_the_in_app_channel_of_critical_alerts_is_400_with_the_stable_code()
+    {
+        var response = await Client(Guid.NewGuid(), Roles.User)
+            .PutAsJsonAsync("/api/notification-preferences/CRITICAL", new { inApp = false, push = true, email = true, sms = true });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("preferences.critical_requires_in_app", await Title(response));
+    }
+
+    [Fact]
+    public async Task Preferences_need_a_token()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateClient().GetAsync("/api/notification-preferences")).StatusCode);
+    }
 }
