@@ -193,4 +193,31 @@ public sealed class NotificationsApiTests : IDisposable
         Assert.Contains("Válvula cerrada", mail.Subject);
         Assert.Contains($"/places/{place}", mail.TextBody);
     }
+
+    [Fact]
+    public async Task A_silent_device_puts_one_important_alert_in_the_owner_inbox()
+    {
+        var owner = Guid.NewGuid();
+        var place = Guid.NewGuid();
+        var device = Guid.NewGuid();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var handler = scope.ServiceProvider.GetRequiredService<IDeviceEventsHandler>();
+            await handler.HandleAsync("evt-1", new DeviceLinkedEvent(device, "SW-ESP32-000001", place, owner, DateTime.UtcNow), default);
+            // its last reading was 11 minutes ago (server time)
+            await handler.HandleAsync("evt-2", new ReadingReceivedEvent(device, place, DateTime.UtcNow, 1m, 0.1m, 10m, DateTime.UtcNow.AddMinutes(-11)), default);
+        }
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var detector = scope.ServiceProvider.GetRequiredService<IDetectOfflineDevicesUseCase>();
+            Assert.Equal(1, await detector.ExecuteAsync(default));
+            Assert.Equal(0, await detector.ExecuteAsync(default));
+        }
+
+        var inbox = (await Client(owner, Roles.User).GetFromJsonAsync<JsonElement>("/api/notifications")).EnumerateArray().ToList();
+        var alert = Assert.Single(inbox, n => n.GetProperty("type").GetString() == "DEVICE_OFFLINE");
+        Assert.Equal("WARNING", alert.GetProperty("severity").GetString());
+        Assert.Equal(place, alert.GetProperty("placeId").GetGuid());
+    }
 }

@@ -23,7 +23,17 @@ public sealed class PlaceDevice
     public ValveStatus? ValveState { get; private set; }
     public DateTime? ValveReportedAt { get; private set; }
 
-    private PlaceDevice(Guid placeId, Guid deviceId, Guid userId, string serialNumber, ValveStatus? valveState, DateTime? valveReportedAt)
+    /// <summary>Last reading received (SERVER time, not the ESP32 clock). null = it never reported.</summary>
+    public DateTime? LastReadingAt { get; private set; }
+
+    /// <summary>When the owner was told the device went silent; null = not alerted. Cleared by the next reading.</summary>
+    public DateTime? OfflineAlertedAt { get; private set; }
+
+    /// <summary>Readings arrive every few seconds: the last-seen date is saved at most this often.</summary>
+    public static readonly TimeSpan SaveReadingEvery = TimeSpan.FromSeconds(30);
+
+    private PlaceDevice(Guid placeId, Guid deviceId, Guid userId, string serialNumber, ValveStatus? valveState, DateTime? valveReportedAt,
+        DateTime? lastReadingAt, DateTime? offlineAlertedAt)
     {
         PlaceId = placeId;
         DeviceId = deviceId;
@@ -31,14 +41,16 @@ public sealed class PlaceDevice
         SerialNumber = serialNumber;
         ValveState = valveState;
         ValveReportedAt = valveReportedAt;
+        LastReadingAt = lastReadingAt;
+        OfflineAlertedAt = offlineAlertedAt;
     }
 
     public static PlaceDevice ForNewLink(Guid placeId, Guid deviceId, Guid userId, string serialNumber) =>
-        new(placeId, deviceId, userId, serialNumber, null, null);
+        new(placeId, deviceId, userId, serialNumber, null, null, null, null);
 
     public static PlaceDevice Restore(Guid placeId, Guid deviceId, Guid userId, string serialNumber,
-        ValveStatus? valveState, DateTime? valveReportedAt) =>
-        new(placeId, deviceId, userId, serialNumber, valveState, valveReportedAt);
+        ValveStatus? valveState, DateTime? valveReportedAt, DateTime? lastReadingAt = null, DateTime? offlineAlertedAt = null) =>
+        new(placeId, deviceId, userId, serialNumber, valveState, valveReportedAt, lastReadingAt, offlineAlertedAt);
 
     /// <summary>
     /// Older or repeated reports (RabbitMQ does not promise order) are ignored. A report is a CHANGE when the
@@ -61,4 +73,29 @@ public sealed class PlaceDevice
         };
         return new(true, change);
     }
+
+    /// <summary>
+    /// A reading arrived. Older or repeated ones are ignored. Reconnecting clears the "already alerted" mark so a
+    /// future silence alerts again. Returns true when it must be saved: always after an alert, otherwise at most
+    /// every <see cref="SaveReadingEvery"/> (the threshold is minutes, so that precision is plenty).
+    /// </summary>
+    public bool ApplyReading(DateTime receivedAt)
+    {
+        if (LastReadingAt is { } last && receivedAt <= last) return false;
+
+        var gap = LastReadingAt is { } previous ? receivedAt - previous : TimeSpan.MaxValue;
+        var wasAlerted = OfflineAlertedAt is not null;
+        LastReadingAt = receivedAt;
+        OfflineAlertedAt = null;
+        return wasAlerted || gap >= SaveReadingEvery;
+    }
+
+    /// <summary>
+    /// HU-032: it reported at least once, has been silent for <paramref name="after"/> (default 10 min) and the owner
+    /// was not told yet. A device that never reported is shown as "never reported" (HU-013), not alerted.
+    /// </summary>
+    public bool IsSilent(DateTime now, TimeSpan after) =>
+        OfflineAlertedAt is null && LastReadingAt is { } last && now - last >= after;
+
+    public void MarkOfflineAlerted(DateTime now) => OfflineAlertedAt = now;
 }

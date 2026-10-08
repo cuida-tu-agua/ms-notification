@@ -18,3 +18,16 @@ public sealed record ValveReportedEvent(Guid DeviceId, Guid PlaceId, string Stat
 {
     public const string EventType = "device.valve.reported";
 }
+
+/// <summary>Published by device-service on every telemetry reading. Only ReceivedAt (server time) matters here: it proves the device is alive.</summary>
+public sealed record ReadingReceivedEvent(
+    Guid DeviceId,
+    Guid PlaceId,
+    DateTime RecordedAt,
+    decimal FlowLpm,
+    decimal VolumeLiters,
+    decimal TotalLiters,
+    DateTime ReceivedAt)
+{
+    public const string EventType = "device.reading.received";
+}

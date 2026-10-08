@@ -69,6 +69,16 @@ public sealed class DeviceEventsHandler(IPlaceDeviceRepository devices, Notifica
         await devices.SaveValveReportAsync(device, ct);
     }
 
+
+    /// <summary>HU-032: proof of life. Saved at most every 30 s per device; reconnecting re-arms the offline alert.</summary>
+    public async Task HandleAsync(string eventId, ReadingReceivedEvent e, CancellationToken ct)
+    {
+        var device = await devices.GetByPlaceAsync(e.PlaceId, ct);
+        if (device is null || device.DeviceId != e.DeviceId) return;   // late reading of an unlinked / replaced device
+
+        if (device.ApplyReading(DateTime.SpecifyKind(e.ReceivedAt, DateTimeKind.Utc)))
+            await devices.SaveReadingAsync(device, ct);
+    }
     private static string Label(string serial) => $"Lugar con el dispositivo {serial}";
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;

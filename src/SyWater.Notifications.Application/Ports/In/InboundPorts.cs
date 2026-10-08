@@ -30,3 +30,9 @@ public interface ISendDueEmailsUseCase
 {
     Task<int> ExecuteAsync(CancellationToken ct);
 }
+
+/// <summary>HU-032: tells the owners whose device went silent. Returns how many alerts were created.</summary>
+public interface IDetectOfflineDevicesUseCase
+{
+    Task<int> ExecuteAsync(CancellationToken ct);
+}

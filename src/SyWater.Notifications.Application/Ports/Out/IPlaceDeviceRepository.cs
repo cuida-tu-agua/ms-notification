@@ -15,4 +15,13 @@ public interface IPlaceDeviceRepository
 
     /// <summary>Saves valve state + date, only if this report is newer than the stored one.</summary>
     Task SaveValveReportAsync(PlaceDevice device, CancellationToken ct);
+
+    /// <summary>Saves last_reading_at (if newer) and clears the "already alerted" mark: the device is back.</summary>
+    Task SaveReadingAsync(PlaceDevice device, CancellationToken ct);
+
+    /// <summary>HU-032: devices that reported before, were last heard at or before <paramref name="cutoffUtc"/> and were not alerted yet.</summary>
+    Task<IReadOnlyList<PlaceDevice>> FindSilentAsync(DateTime cutoffUtc, int max, CancellationToken ct);
+
+    /// <summary>Marks the alert as sent, ONLY if the device did not report meanwhile (same last reading). True if marked.</summary>
+    Task<bool> MarkOfflineAlertedAsync(PlaceDevice device, DateTime now, CancellationToken ct);
 }

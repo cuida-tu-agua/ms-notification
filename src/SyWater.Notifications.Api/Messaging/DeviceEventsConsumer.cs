@@ -7,7 +7,8 @@ namespace SyWater.Notifications.Api.Messaging;
 
 /// <summary>
 /// Queue "notification.device-events": device.linked / device.unlinked (tell the owner and learn who owns the
-/// place) and device.valve.reported (a valve that closed is a critical notification, HU-033).
+/// place), device.valve.reported (a valve that closed is a critical notification, HU-033) and
+/// device.reading.received (proof of life for the "sensor disconnected" alert, HU-032).
 /// </summary>
 public sealed class DeviceEventsConsumer(
     IServiceScopeFactory scopes,
@@ -17,7 +18,7 @@ public sealed class DeviceEventsConsumer(
     protected override string QueueName => "notification.device-events";
 
     protected override IReadOnlyList<string> RoutingKeys =>
-        [DeviceLinkedEvent.EventType, DeviceUnlinkedEvent.EventType, ValveReportedEvent.EventType];
+        [DeviceLinkedEvent.EventType, DeviceUnlinkedEvent.EventType, ValveReportedEvent.EventType, ReadingReceivedEvent.EventType];
 
     protected override async Task HandleAsync(string eventId, string type, JsonElement data, CancellationToken ct)
     {
@@ -40,6 +41,11 @@ public sealed class DeviceEventsConsumer(
                 var reported = Read<ValveReportedEvent>(data);
                 RequireIds(reported.DeviceId, reported.PlaceId);
                 await handler.HandleAsync(eventId, reported, ct);
+                break;
+            case ReadingReceivedEvent.EventType:
+                var reading = Read<ReadingReceivedEvent>(data);
+                RequireIds(reading.DeviceId, reading.PlaceId);
+                await handler.HandleAsync(eventId, reading, ct);
                 break;
             default:
                 logger.LogDebug("Event {Type} ignored", type);

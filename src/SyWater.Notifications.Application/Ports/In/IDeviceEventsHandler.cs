@@ -11,4 +11,5 @@ public interface IDeviceEventsHandler
     Task HandleAsync(string eventId, DeviceLinkedEvent e, CancellationToken ct);
     Task HandleAsync(string eventId, DeviceUnlinkedEvent e, CancellationToken ct);
     Task HandleAsync(string eventId, ValveReportedEvent e, CancellationToken ct);
+    Task HandleAsync(string eventId, ReadingReceivedEvent e, CancellationToken ct);
 }

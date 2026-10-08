@@ -229,3 +229,83 @@ public sealed class EfNotificationPreferenceRepositoryTests : IDisposable
 
     public void Dispose() => _sqlite.Dispose();
 }
+
+public sealed class EfPlaceDeviceLivenessTests : IDisposable
+{
+    private static readonly DateTime T0 = new(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
+    private readonly SqliteConnection _sqlite = new("DataSource=:memory:");
+    private readonly DbContextOptions<NotificationDbContext> _options;
+    private readonly Guid _place = Guid.NewGuid();
+    private readonly Guid _device = Guid.NewGuid();
+
+    public EfPlaceDeviceLivenessTests()
+    {
+        _sqlite.Open();
+        _options = new DbContextOptionsBuilder<NotificationDbContext>().UseSqlite(_sqlite).Options;
+        using var db = new NotificationDbContext(_options);
+        db.Database.EnsureCreated();
+    }
+
+    private EfPlaceDeviceRepository Repo() => new(new NotificationDbContext(_options));
+
+    private async Task<SyWater.Notifications.Domain.Devices.PlaceDevice> LinkedWithReadingAt(DateTime at)
+    {
+        await Repo().ReplaceAsync(SyWater.Notifications.Domain.Devices.PlaceDevice.ForNewLink(_place, _device, Guid.NewGuid(), "SW-1"), T0, default);
+        var device = (await Repo().GetByPlaceAsync(_place, default))!;
+        device.ApplyReading(at);
+        await Repo().SaveReadingAsync(device, default);
+        return device;
+    }
+
+    [Fact]
+    public async Task Only_devices_that_reported_and_went_silent_without_an_alert_are_found()
+    {
+        await LinkedWithReadingAt(T0);
+
+        Assert.Empty(await Repo().FindSilentAsync(T0.AddMinutes(-1), 10, default));        // heard more recently than the cutoff
+        var silent = Assert.Single(await Repo().FindSilentAsync(T0.AddMinutes(10), 10, default));
+        Assert.Equal(DateTimeKind.Utc, silent.LastReadingAt!.Value.Kind);
+
+        Assert.True(await Repo().MarkOfflineAlertedAsync(silent, T0.AddMinutes(10), default));
+        Assert.Empty(await Repo().FindSilentAsync(T0.AddMinutes(10), 10, default));         // ONE alert
+        Assert.False(await Repo().MarkOfflineAlertedAsync(silent, T0.AddMinutes(11), default));   // a second sweeper changes nothing
+    }
+
+    [Fact]
+    public async Task A_device_that_never_reported_is_never_found()
+    {
+        await Repo().ReplaceAsync(SyWater.Notifications.Domain.Devices.PlaceDevice.ForNewLink(_place, _device, Guid.NewGuid(), "SW-1"), T0, default);
+
+        Assert.Empty(await Repo().FindSilentAsync(T0.AddDays(5), 10, default));
+    }
+
+    [Fact]
+    public async Task A_new_reading_clears_the_alert_and_a_reading_during_the_alert_prevents_marking()
+    {
+        var device = await LinkedWithReadingAt(T0);
+        var stale = (await Repo().FindSilentAsync(T0.AddMinutes(10), 10, default)).Single();   // sweeper read it…
+
+        device.ApplyReading(T0.AddMinutes(10));                                                  // …and the device reported meanwhile
+        await Repo().SaveReadingAsync(device, default);
+        Assert.False(await Repo().MarkOfflineAlertedAsync(stale, T0.AddMinutes(10), default));  // not marked: it is alive
+
+        var alive = (await Repo().GetByPlaceAsync(_place, default))!;
+        Assert.True(await Repo().MarkOfflineAlertedAsync(alive, T0.AddMinutes(20), default));
+        alive.ApplyReading(T0.AddMinutes(25));
+        await Repo().SaveReadingAsync(alive, default);
+        Assert.Null((await Repo().GetByPlaceAsync(_place, default))!.OfflineAlertedAt);          // reconnecting re-arms it
+    }
+
+    [Fact]
+    public async Task An_older_reading_never_overwrites_a_newer_one()
+    {
+        var device = await LinkedWithReadingAt(T0.AddMinutes(5));
+        var older = SyWater.Notifications.Domain.Devices.PlaceDevice.Restore(_place, _device, device.UserId, "SW-1", null, null, T0, null);
+
+        await Repo().SaveReadingAsync(older, default);
+
+        Assert.Equal(T0.AddMinutes(5), (await Repo().GetByPlaceAsync(_place, default))!.LastReadingAt);
+    }
+
+    public void Dispose() => _sqlite.Dispose();
+}

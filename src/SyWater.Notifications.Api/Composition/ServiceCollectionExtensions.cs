@@ -22,6 +22,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new EmailSettings(EmailEnabled(config), config["App:PublicUrl"] ?? "http://localhost:8081"));
         services.AddSingleton(EmailRetryPolicy.Default);
+        services.AddSingleton(new OfflineSettings(TimeSpan.FromMinutes(config.GetValue("Devices:OfflineAfterMinutes", 10))));
         services.AddScoped<IListMyNotificationsUseCase, ListMyNotificationsUseCase>();
         services.AddScoped<IGetUnreadCountUseCase, GetUnreadCountUseCase>();
         services.AddScoped<IMarkNotificationReadUseCase, MarkNotificationReadUseCase>();
@@ -31,10 +32,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<NotificationDispatcher>();
         services.AddScoped<IDeviceEventsHandler, DeviceEventsHandler>();
         services.AddScoped<ISendDueEmailsUseCase, SendDueEmailsUseCase>();
+        services.AddScoped<IDetectOfflineDevicesUseCase, DetectOfflineDevicesUseCase>();
         return services;
     }
 
-    /// <summary>RabbitMQ consumer (empty RabbitMq:Host = not started) + the e-mail worker (only if Smtp:Host is set).</summary>
+    /// <summary>RabbitMQ consumer (empty RabbitMq:Host = not started), the e-mail worker (only if Smtp:Host is set) and the offline-device detector.</summary>
     public static IServiceCollection AddNotificationsBackground(this IServiceCollection services, IConfiguration config)
     {
         services.Configure<RabbitMqOptions>(config.GetSection(RabbitMqOptions.Section));
@@ -42,6 +44,7 @@ public static class ServiceCollectionExtensions
             services.AddHostedService<DeviceEventsConsumer>();
         if (EmailEnabled(config))
             services.AddHostedService<EmailDeliveryWorker>();
+        services.AddHostedService<OfflineDeviceWorker>();
         return services;
     }
 

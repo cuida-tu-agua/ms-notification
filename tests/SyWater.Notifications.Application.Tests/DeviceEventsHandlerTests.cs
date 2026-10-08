@@ -22,6 +22,15 @@ public sealed class FakePlaceDevices : IPlaceDeviceRepository
         return Task.CompletedTask;
     }
     public Task SaveValveReportAsync(PlaceDevice device, CancellationToken ct) => Task.CompletedTask;   // same instance in memory
+    public Task SaveReadingAsync(PlaceDevice device, CancellationToken ct) => Task.CompletedTask;
+    public Task<IReadOnlyList<PlaceDevice>> FindSilentAsync(DateTime cutoffUtc, int max, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<PlaceDevice>>(
+            ByPlace.Values.Where(d => d.OfflineAlertedAt is null && d.LastReadingAt <= cutoffUtc).Take(max).ToList());
+    public Task<bool> MarkOfflineAlertedAsync(PlaceDevice device, DateTime now, CancellationToken ct)
+    {
+        device.MarkOfflineAlerted(now);
+        return Task.FromResult(true);
+    }
 }
 
 public class DeviceEventsHandlerTests

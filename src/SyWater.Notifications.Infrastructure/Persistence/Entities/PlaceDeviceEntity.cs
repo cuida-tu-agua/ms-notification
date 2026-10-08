@@ -13,5 +13,7 @@ public sealed class PlaceDeviceEntity
     [Column("serial_number")] public string SerialNumber { get; set; } = "";
     [Column("valve_state")] public string? ValveState { get; set; }
     [Column("valve_reported_at")] public DateTime? ValveReportedAt { get; set; }
+    [Column("last_reading_at")] public DateTime? LastReadingAt { get; set; }
+    [Column("offline_alerted_at")] public DateTime? OfflineAlertedAt { get; set; }
     [Column("created_at")] public DateTime CreatedAt { get; set; }
 }
