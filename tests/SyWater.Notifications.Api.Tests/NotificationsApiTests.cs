@@ -181,6 +181,36 @@ public sealed class NotificationsApiTests : IDisposable
     }
 
     [Fact]
+    public async Task A_critical_alert_reaches_the_registered_phone_and_stops_after_it_is_unregistered()
+    {
+        var owner = Guid.NewGuid();
+        var place = Guid.NewGuid();
+        var client = Client(owner, Roles.User);
+        await client.PostAsJsonAsync("/api/push-tokens", new { token = "ExponentPushToken[alert-phone]", platform = "ios" });
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var handler = scope.ServiceProvider.GetRequiredService<IDeviceEventsHandler>();
+            var device = Guid.NewGuid();
+            await handler.HandleAsync("evt-p1", new DeviceLinkedEvent(device, "SW-1", place, owner, DateTime.UtcNow), default);
+            await handler.HandleAsync("evt-p2", new ValveReportedEvent(device, place, "CLOSED", null, DateTime.UtcNow.AddSeconds(1)), default);
+        }
+
+        var push = Assert.Single(_factory.Push.Sent);
+        Assert.Equal("ExponentPushToken[alert-phone]", push.Token);
+        Assert.Equal(place.ToString(), push.Data["placeId"]);
+
+        var delete = new HttpRequestMessage(HttpMethod.Delete, "/api/push-tokens") { Content = JsonContent.Create(new { token = "ExponentPushToken[alert-phone]" }) };
+        await client.SendAsync(delete);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var handler = scope.ServiceProvider.GetRequiredService<IDeviceEventsHandler>();
+            await handler.HandleAsync("evt-p3", new ValveReportedEvent(Guid.NewGuid(), place, "CLOSED", null, DateTime.UtcNow.AddSeconds(2)), default);
+        }
+        Assert.Single(_factory.Push.Sent);   // the logged-out phone gets nothing
+    }
+
+    [Fact]
     public async Task A_bad_push_token_or_platform_is_400_with_the_stable_code()
     {
         var client = Client(Guid.NewGuid(), Roles.User);

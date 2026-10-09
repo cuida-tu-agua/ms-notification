@@ -31,6 +31,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     public FakeContacts Contacts { get; } = new();
     public FakeSender Sender { get; } = new();
+    public FakePushSender Push { get; } = new();
 
     public ApiFactory()
     {
@@ -58,6 +59,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IUserContactDirectory>(Contacts);
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(Sender);
+            services.RemoveAll<IPushSender>();   // never talk to the real Expo
+            services.AddSingleton<IPushSender>(Push);
 
             services.RemoveAll<ITokenRevocationChecker>();
             services.AddSingleton<ITokenRevocationChecker, NoRevocations>();

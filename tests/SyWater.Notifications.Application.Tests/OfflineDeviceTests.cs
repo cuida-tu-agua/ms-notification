@@ -17,7 +17,7 @@ public class OfflineDeviceTests
     private readonly Guid _place = Guid.NewGuid();
     private readonly Guid _device = Guid.NewGuid();
 
-    private NotificationDispatcher Dispatcher() => new(_notifications, _prefs, _outbox, new EmailSettings(true, "http://app"), _clock);
+    private NotificationDispatcher Dispatcher() => new(_notifications, _prefs, _outbox, new EmailSettings(true, "http://app"), TestPush.Off(), _clock);
     private DeviceEventsHandler Handler() => new(_devices, Dispatcher(), _clock);
     private DetectOfflineDevicesUseCase Detector() => new(_devices, Dispatcher(), OfflineSettings.Default, _clock);
 

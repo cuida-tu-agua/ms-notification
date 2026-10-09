@@ -8,6 +8,7 @@ using SyWater.Notifications.Domain.Emails;
 using SyWater.Notifications.Infrastructure.Email;
 using SyWater.Notifications.Infrastructure.Http;
 using SyWater.Notifications.Infrastructure.Persistence;
+using SyWater.Notifications.Infrastructure.Push;
 
 namespace SyWater.Notifications.Api.Composition;
 
@@ -17,11 +18,16 @@ public static class ServiceCollectionExtensions
     /// <summary>The e-mail channel is on only when an SMTP host is configured (Mailpit in development).</summary>
     public static bool EmailEnabled(IConfiguration config) => !string.IsNullOrWhiteSpace(config[$"{SmtpOptions.Section}:Host"]);
 
+    /// <summary>The push channel is on unless Push:Enabled is false (it only calls Expo for users who registered a phone).</summary>
+    public static bool PushEnabled(IConfiguration config) => config.GetValue("Push:Enabled", true);
+
     public static IServiceCollection AddNotificationsApplication(this IServiceCollection services, IConfiguration config)
     {
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new EmailSettings(EmailEnabled(config), config["App:PublicUrl"] ?? "http://localhost:8081"));
         services.AddSingleton(EmailRetryPolicy.Default);
+        services.AddSingleton(new PushSettings(PushEnabled(config)));
+        services.AddScoped<PushNotifier>();
         services.AddSingleton(new OfflineSettings(TimeSpan.FromMinutes(config.GetValue("Devices:OfflineAfterMinutes", 10))));
         services.AddScoped<IListMyNotificationsUseCase, ListMyNotificationsUseCase>();
         services.AddScoped<IGetUnreadCountUseCase, GetUnreadCountUseCase>();
@@ -62,6 +68,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationPreferenceRepository, EfNotificationPreferenceRepository>();
         services.AddScoped<IEmailOutboxRepository, EfEmailOutboxRepository>();
         services.AddScoped<IPushTokenRepository, EfPushTokenRepository>();
+
+        services.AddHttpClient<IPushSender, ExpoPushSender>(http =>
+        {
+            http.BaseAddress = new Uri(config["Push:ExpoUrl"] ?? "https://exp.host/--/api/v2/push/send");
+            http.Timeout = TimeSpan.FromSeconds(10);
+            if (!string.IsNullOrWhiteSpace(config["Push:ExpoAccessToken"]))   // optional: only if the Expo account enabled enhanced security
+                http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", config["Push:ExpoAccessToken"]);
+        });
 
         if (EmailEnabled(config))
         {

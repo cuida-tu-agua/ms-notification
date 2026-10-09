@@ -139,8 +139,8 @@ public class EmailTests
     {
         var notifications = new FakeNotifications();
         var prefs = new FakePreferences();
-        var off = new NotificationDispatcher(notifications, prefs, _outbox, new EmailSettings(false, "http://app"), _clock);
-        var on = new NotificationDispatcher(notifications, prefs, _outbox, new EmailSettings(true, "http://app"), _clock);
+        var off = new NotificationDispatcher(notifications, prefs, _outbox, new EmailSettings(false, "http://app"), TestPush.Off(), _clock);
+        var on = new NotificationDispatcher(notifications, prefs, _outbox, new EmailSettings(true, "http://app"), TestPush.Off(), _clock);
         Notification Make(NotificationSeverity s, string src) => Notification.Create(Audience.ForUser(_user),
             NotificationType.ValveChanged, s, "T", "B", null, src, _clock.Now);
 

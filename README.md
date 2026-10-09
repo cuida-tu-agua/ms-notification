@@ -23,7 +23,9 @@ OfflineDeviceWorker (cada 60 s): dispositivo callado ≥ 10 min ──▶ alerta
 | Importante | `WARNING` | sí | sí | no | no |
 | Informativa | `INFO` | sí | no | no | no |
 
-Hoy se entregan **app** y **correo**. Push y SMS/WhatsApp (HU-026, HU-028) se guardan como preferencia pero aún no tienen adaptador.
+Hoy se entregan **app**, **correo** y **push**. SMS/WhatsApp (HU-028) se guarda como preferencia pero aún no tiene adaptador.
+
+**Push (HU-026).** El teléfono registra su token de Expo (`POST /api/push-tokens`) y al cerrar sesión lo quita. Al llegar una alerta, si el usuario conserva el canal push de ese nivel, se envía a todos sus teléfonos por el servicio de Expo (`exp.host`), con `notificationId`, `type`, `severity` y `placeId` para que la app abra la pantalla correcta al tocarla. Es *best-effort*: si Expo no responde no se pierde nada (la alerta sigue en la app y el correo) y el evento no se reintenta; un evento repetido no vuelve a sonar el teléfono. Los tokens que Expo marca como `DeviceNotRegistered` (app desinstalada) se borran solos. "Entregado" significa *aceptado por Expo*; no se consultan los recibos finales. En Android hace falta una *development build* (Expo Go no recibe push remoto desde SDK 53).
 
 **Correo.** Se escribe en una cola (`email_outbox`) junto con la notificación, así que un SMTP caído no pierde la alerta: se reintenta a 1 min, 5 min, 15 min y 1 h; a la 5.ª falla queda `FAILED`. La dirección no se guarda: se pide a ms-iam al enviar. Un evento repetido no manda dos correos. Con `Smtp:Host` vacío el canal queda apagado.
 
@@ -38,6 +40,8 @@ Hoy se entregan **app** y **correo**. Push y SMS/WhatsApp (HU-026, HU-028) se gu
 | POST | `/api/notifications/read-all` | marcar todas |
 | GET | `/api/notification-preferences` | canales por nivel (INFO, WARNING, CRITICAL) |
 | PUT | `/api/notification-preferences/{severity}` `{inApp,push,email,sms}` | 400 `preferences.critical_requires_in_app` si una crítica pierde la app |
+| POST | `/api/push-tokens` `{token,platform}` | `platform` = `android`/`ios`. 204 idempotente; 400 `push.invalid_token` / `push.invalid_platform` |
+| DELETE | `/api/push-tokens` `{token}` | 204 siempre; solo borra si el token es del usuario |
 | GET | `/health` | sin token |
 
 Errores en RFC 9457: el código estable va en `title` (`notification.not_found`, `preferences.critical_requires_in_app`, `auth.invalid_token`).
@@ -67,6 +71,8 @@ En desarrollo el correo sale por Mailpit (`localhost:1025`, ver http://localhost
 | `Services:IamBaseUrl`, `Internal:ApiKey` | para pedir el correo del usuario a ms-iam | |
 | `Devices:OfflineAfterMinutes` | umbral de "sensor desconectado" | `10` |
 | `RabbitMq:*` | broker; con `Host` vacío no consume eventos | |
+| `Push:Enabled` | apaga el canal push (por defecto activo) | `true` |
+| `Push:ExpoUrl` / `Push:ExpoAccessToken` | endpoint de Expo (por defecto el oficial) y token opcional si la cuenta de Expo activó seguridad reforzada. El token va en secretos, nunca en git | |
 
 ## Pruebas
 `dotnet test`: dominio, casos de uso con fakes, EF contra SQLite en memoria y la API completa con `WebApplicationFactory`. SQLite no reproduce algunos detalles de SQL Server (índices únicos con NULL, el `DENY` del rol): se validan al levantar con la BD real.

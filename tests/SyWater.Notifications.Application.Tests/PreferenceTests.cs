@@ -31,7 +31,7 @@ public class PreferenceTests
 
     private UpdateMyPreferencesUseCase Update() => new(_prefs, _clock);
     private readonly FakeOutbox _outbox = new();
-    private NotificationDispatcher Dispatcher() => new(_notifications, _prefs, _outbox, new EmailSettings(true, "http://app"), _clock);
+    private NotificationDispatcher Dispatcher() => new(_notifications, _prefs, _outbox, new EmailSettings(true, "http://app"), TestPush.Off(), _clock);
 
     private Notification Personal(NotificationSeverity severity, string? source = "evt-1") =>
         Notification.Create(Audience.ForUser(_me.UserId), NotificationType.ValveChanged, severity, "T", "B", null, source, _clock.Now);
