@@ -168,6 +168,40 @@ public sealed class NotificationsApiTests : IDisposable
     }
 
     [Fact]
+    public async Task A_phone_registers_and_unregisters_its_push_token()
+    {
+        var client = Client(Guid.NewGuid(), Roles.User);
+        var body = new { token = "ExponentPushToken[api-phone]", platform = "android" };
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/push-tokens", body)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/push-tokens", body)).StatusCode);   // idempotent
+
+        var delete = new HttpRequestMessage(HttpMethod.Delete, "/api/push-tokens") { Content = JsonContent.Create(new { token = body.token }) };
+        Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(delete)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_bad_push_token_or_platform_is_400_with_the_stable_code()
+    {
+        var client = Client(Guid.NewGuid(), Roles.User);
+
+        var token = await client.PostAsJsonAsync("/api/push-tokens", new { token = "not-a-token", platform = "android" });
+        Assert.Equal(HttpStatusCode.BadRequest, token.StatusCode);
+        Assert.Equal("push.invalid_token", await Title(token));
+
+        var platform = await client.PostAsJsonAsync("/api/push-tokens", new { token = "ExponentPushToken[x]", platform = "web" });
+        Assert.Equal(HttpStatusCode.BadRequest, platform.StatusCode);
+        Assert.Equal("push.invalid_platform", await Title(platform));
+    }
+
+    [Fact]
+    public async Task Push_tokens_need_a_token()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await _factory.CreateClient().PostAsJsonAsync("/api/push-tokens", new { token = "ExponentPushToken[x]", platform = "ios" })).StatusCode);
+    }
+
+    [Fact]
     public async Task Preferences_need_a_token()
     {
         Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateClient().GetAsync("/api/notification-preferences")).StatusCode);

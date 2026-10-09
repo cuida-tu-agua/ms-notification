@@ -29,6 +29,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMarkAllNotificationsReadUseCase, MarkAllNotificationsReadUseCase>();
         services.AddScoped<IGetMyPreferencesUseCase, GetMyPreferencesUseCase>();
         services.AddScoped<IUpdateMyPreferencesUseCase, UpdateMyPreferencesUseCase>();
+        services.AddScoped<IRegisterPushTokenUseCase, RegisterPushTokenUseCase>();
+        services.AddScoped<IUnregisterPushTokenUseCase, UnregisterPushTokenUseCase>();
         services.AddScoped<NotificationDispatcher>();
         services.AddScoped<IDeviceEventsHandler, DeviceEventsHandler>();
         services.AddScoped<ISendDueEmailsUseCase, SendDueEmailsUseCase>();
@@ -59,6 +61,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPlaceDeviceRepository, EfPlaceDeviceRepository>();
         services.AddScoped<INotificationPreferenceRepository, EfNotificationPreferenceRepository>();
         services.AddScoped<IEmailOutboxRepository, EfEmailOutboxRepository>();
+        services.AddScoped<IPushTokenRepository, EfPushTokenRepository>();
 
         if (EmailEnabled(config))
         {

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using SyWater.Notifications.Domain.Common;
 using SyWater.Notifications.Domain.Notifications;
 using SyWater.Notifications.Domain.Preferences;
+using SyWater.Notifications.Domain.Push;
 
 namespace SyWater.Notifications.Api.Errors;
 
@@ -16,6 +17,8 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
             InvalidNotificationException e => (StatusCodes.Status400BadRequest, e.Code),
             InvalidAudienceException e => (StatusCodes.Status400BadRequest, e.Code),
             CriticalChannelRequiredException e => (StatusCodes.Status400BadRequest, e.Code),
+            InvalidPushTokenException e => (StatusCodes.Status400BadRequest, e.Code),
+            InvalidPushPlatformException e => (StatusCodes.Status400BadRequest, e.Code),
             UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "auth.invalid_token"),
             _ => (0, ""),
         };
